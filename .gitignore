@@ -1,0 +1,17 @@
+# 虛擬環境
+.venv/
+
+# 工作規則（不追蹤）
+CLAUDE.md
+
+# 架構文件檔
+*.pdf
+
+# 系統檔案
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
