@@ -1,7 +1,7 @@
 import pygame
 import random
 from game.settings import *
-from game.entities import Player, Drone, PlayerBullet, Star
+from game.entities import Player, Drone, PlayerBullet, EnemyBullet, Star
 
 
 class Game:
@@ -35,11 +35,16 @@ class Game:
         self.all_sprites  = pygame.sprite.Group(self.player)
         self.enemies      = pygame.sprite.Group()
         self.player_bullets = pygame.sprite.Group()
-        self.score        = 0
-        self.frame        = 0
-        self.state        = "playing"
+        self.enemy_bullets  = pygame.sprite.Group()
+        self.score              = 0
+        self.frame              = 0
+        self.level              = 0
+        self.player_level       = 0
+        self.player_kills       = 0
+        self.player_fire_interval  = PLAYER_FIRE_INTERVAL
+        self.player_bullet_speed   = PLAYER_BULLET_SPEED
+        self.state              = "playing"
         self.stars        = [Star(randomize_y=True) for _ in range(STAR_COUNT)]
-        self._last_dir    = ""
 
     def _handle_events(self):
         for event in pygame.event.get():
@@ -51,36 +56,67 @@ class Game:
                 return False
         return True
 
+    def _add_kills(self, count):
+        if self.player_level >= PLAYER_MAX_LEVEL:
+            self.player_kills = self.player_kills  # 滿級後不再累加觸發
+            return
+        self.player_kills += count
+        while self.player_kills >= PLAYER_KILLS_PER_LEVEL and self.player_level < PLAYER_MAX_LEVEL:
+            self.player_kills -= PLAYER_KILLS_PER_LEVEL
+            self.player_level += 1
+            self.player.hp = min(PLAYER_HP, self.player.hp + PLAYER_HP // 2)
+            self.player_fire_interval = max(2, self.player_fire_interval / 1.2)
+            self.player_bullet_speed += 2
+
+    def _level_params(self):
+        lv = self.level
+        drone_speed    = DRONE_SPEED + lv * 0.5
+        bullet_speed   = ENEMY_BULLET_SPEED + lv * 0.5
+        spawn_interval = max(40, DRONE_SPAWN_INTERVAL - lv * 8)
+        spawn_count    = min(5, 2 + lv // 2)
+        return drone_speed, bullet_speed, spawn_interval, spawn_count
+
     def _update(self):
         self.frame += 1
+        self.level = self.frame // (8 * FPS)
         keys = pygame.key.get_pressed()
 
         # 玩家移動
         self.player.update(keys)
 
-        # 移動方向輸出
-        self._print_direction(keys)
-
         # 自動射擊
-        if self.frame % PLAYER_FIRE_INTERVAL == 0:
-            bullet = PlayerBullet(self.player.rect.centerx, self.player.rect.top)
-            self.player_bullets.add(bullet)
-            self.all_sprites.add(bullet)
+        if self.frame % int(self.player_fire_interval) == 0:
+            positions = (
+                [self.player.rect.centerx - 8, self.player.rect.centerx + 8]
+                if self.player_level >= 4
+                else [self.player.rect.centerx]
+            )
+            for x in positions:
+                bullet = PlayerBullet(x, self.player.rect.top, speed=self.player_bullet_speed)
+                self.player_bullets.add(bullet)
+                self.all_sprites.add(bullet)
 
-        # 生成 Drone（每波 2～3 架並排）
-        if self.frame % DRONE_SPAWN_INTERVAL == 0:
-            count   = random.randint(2, 3)
-            spacing = SCREEN_WIDTH // (count + 1)
-            for i in range(count):
-                drone = Drone(x=spacing * (i + 1))
+        # 生成 Drone（依 level 調整生成間隔與數量）
+        drone_speed, bullet_speed, spawn_interval, spawn_count = self._level_params()
+        if self.frame % spawn_interval == 0:
+            section_w = (SCREEN_WIDTH - 40) // spawn_count
+            for i in range(spawn_count):
+                x = 20 + i * section_w + random.randint(10, section_w - 10)
+                drone = Drone(x=x, speed=drone_speed)
                 self.enemies.add(drone)
                 self.all_sprites.add(drone)
 
         # 子彈移動
         self.player_bullets.update()
+        self.enemy_bullets.update()
 
-        # 敵人移動
+        # 敵人移動 + 射擊
         self.enemies.update()
+        for drone in self.enemies:
+            bullet = drone.try_shoot(bullet_speed=bullet_speed)
+            if bullet:
+                self.enemy_bullets.add(bullet)
+                self.all_sprites.add(bullet)
 
         # 星空
         for star in self.stars:
@@ -90,15 +126,30 @@ class Game:
         hits = pygame.sprite.groupcollide(
             self.player_bullets, self.enemies, True, True
         )
-        self.score += len(hits) * DRONE_SCORE
+        kill_count = len(hits)
+        self.score += kill_count * DRONE_SCORE
+        if kill_count > 0:
+            self._add_kills(kill_count)
 
         # 碰撞：Drone 撞到玩家
         hits = pygame.sprite.spritecollide(
             self.player, self.enemies, True,
             pygame.sprite.collide_mask
         )
-        for _ in hits:
+        if hits and self.player.invincible_frames == 0:
             self.player.hp -= 1
+            self.player.invincible_frames = PLAYER_INVINCIBLE_FRAMES
+            if self.player.hp <= 0:
+                self.state = "gameover"
+                return
+
+        # 碰撞：敵人子彈打中玩家
+        hits = pygame.sprite.spritecollide(
+            self.player, self.enemy_bullets, True
+        )
+        if hits and self.player.invincible_frames == 0:
+            self.player.hp -= 1
+            self.player.invincible_frames = PLAYER_INVINCIBLE_FRAMES
             if self.player.hp <= 0:
                 self.state = "gameover"
                 return
@@ -118,49 +169,53 @@ class Game:
 
         pygame.display.flip()
 
-    def _print_direction(self, keys):
-        dirs = []
-        if keys[pygame.K_UP]    or keys[pygame.K_w]: dirs.append("上")
-        if keys[pygame.K_DOWN]  or keys[pygame.K_s]: dirs.append("下")
-        if keys[pygame.K_LEFT]  or keys[pygame.K_a]: dirs.append("左")
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]: dirs.append("右")
-        label = "移動方向：" + "、".join(dirs) if dirs else "靜止"
-        if label != self._last_dir:
-            print(label)
-            self._last_dir = label
-
     def _draw_hud(self):
-        # 分數（左上）
-        score_surf = self.font_small.render(f"SCORE  {self.score:07d}", True, GRAY)
-        self.screen.blit(score_surf, (10, 10))
+        # 分數（頂端置中，大字）
+        score_surf = self.font_large.render(f"{self.score}", True, WHITE)
+        self.screen.blit(score_surf, score_surf.get_rect(centerx=SCREEN_WIDTH // 2, top=8))
 
-        # HP 方塊（右上）
-        label = self.font_small.render("HP", True, GRAY)
-        self.screen.blit(label, (SCREEN_WIDTH - 10 - self.player.hp * 18 - 30, 10))
+        # 左上：敵方難度
+        stage_surf = self.font_small.render(f"STAGE  {self.level}", True, GRAY)
+        self.screen.blit(stage_surf, (10, 10))
+
+        # 右上：HP 方塊
+        hp_label = self.font_small.render("HP", True, GRAY)
+        self.screen.blit(hp_label, (SCREEN_WIDTH - 10 - self.player.hp * 18 - 30, 10))
         for i in range(self.player.hp):
             x = SCREEN_WIDTH - 10 - (self.player.hp - i) * 18
             pygame.draw.rect(self.screen, CYAN, (x, 10, 14, 14))
 
+        # 右上：玩家等級與進度條（HP 下方）
+        plv_surf = self.font_small.render(f"P-LV  {self.player_level}", True, CYAN)
+        self.screen.blit(plv_surf, (SCREEN_WIDTH - 10 - 80, 30))
+        bar_total = 80
+        if self.player_level < PLAYER_MAX_LEVEL:
+            filled = int(bar_total * self.player_kills / PLAYER_KILLS_PER_LEVEL)
+        else:
+            filled = bar_total
+        pygame.draw.rect(self.screen, GRAY, (SCREEN_WIDTH - 10 - bar_total, 50, bar_total, 6))
+        pygame.draw.rect(self.screen, CYAN, (SCREEN_WIDTH - 10 - bar_total, 50, filled,    6))
+
     def _gameover_screen(self):
-        self.screen.fill(BLACK)
         go_surf    = self.font_large.render("GAME OVER", True, RED)
-        sc_surf    = self.font_small.render(f"SCORE  {self.score:07d}", True, GRAY)
+        sc_surf    = self.font_small.render(f"SCORE  {self.score}", True, GRAY)
         retry_surf = self.font_small.render("Press  R  to retry  /  ESC  to quit", True, WHITE)
 
-        self.screen.blit(go_surf,    go_surf.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 50)))
-        self.screen.blit(sc_surf,    sc_surf.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2)))
-        self.screen.blit(retry_surf, retry_surf.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 50)))
-        pygame.display.flip()
+        while True:
+            self.screen.fill(BLACK)
+            self.screen.blit(go_surf,    go_surf.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 50)))
+            self.screen.blit(sc_surf,    sc_surf.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2)))
+            self.screen.blit(retry_surf, retry_surf.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 50)))
+            pygame.display.flip()
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                return False
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
                     pygame.quit()
                     return False
-                if event.key == pygame.K_r:
-                    return True
-        self.clock.tick(FPS)
-        return True
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        pygame.quit()
+                        return False
+                    if event.key == pygame.K_r:
+                        return True
+            self.clock.tick(FPS)
