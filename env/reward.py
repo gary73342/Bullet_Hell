@@ -21,14 +21,14 @@ STATIC_THRESHOLD = 10   # 連續靜止幾步後才扣分
 class RewardCalculator:
     def reset(self):
         self._static_steps = 0
-        self._last_pos = None
 
-    def calculate(self, player_x, player_y, kills, hit, died):
+    def calculate(self, player_x, player_y, kills, hit, died, dx, dy):
         """
         每個 env step 呼叫一次（frame skip 結束後）。
         kills : int  — 這個 step 內擊殺的敵人數
         hit   : bool — 這個 step 內玩家是否被擊中
         died  : bool — 這個 step 內玩家是否死亡
+        dx/dy : int  — 這個 step 的移動方向（0 表示未輸入）
         """
         reward = 0.0
 
@@ -40,15 +40,13 @@ class RewardCalculator:
         if died:
             reward += REWARD_DEATH
 
-        # 靜止懲罰
-        pos = (player_x, player_y)
-        if self._last_pos is not None and pos == self._last_pos:
+        # 靜止懲罰：只在真正選擇不動時累積（貼牆但有移動輸入不算）
+        if dx == 0 and dy == 0:
             self._static_steps += 1
             if self._static_steps > STATIC_THRESHOLD:
                 reward += REWARD_STATIC
         else:
             self._static_steps = 0
-        self._last_pos = pos
 
         # 位置獎勵：越靠近甜蜜點越高
         dist = math.hypot(player_x - _SWEET_X, player_y - _SWEET_Y)

@@ -78,15 +78,17 @@ class BulletHellEnv(Env):
             player_x=self._game.player.rect.centerx,
             player_y=self._game.player.rect.centery,
             kills=kills, hit=hit, died=died,
+            dx=dx, dy=dy,
         )
 
         if self.render_mode == "human":
             self.render()
 
         info = {
-            "score": self._game.score,
-            "hp":    self._game.player.hp,
-            "level": self._game.level,
+            "score":        self._game.score,
+            "hp":           self._game.player.hp,
+            "level":        self._game.level,
+            "player_level": self._game.player_level,
         }
 
         return self._stack_obs(), reward, died, False, info

@@ -12,7 +12,7 @@ class Game:
         else:
             self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
             pygame.display.set_caption(TITLE)
-        self.clock  = pygame.font.init() or pygame.time.Clock()
+        pygame.font.init()
         self.clock  = pygame.time.Clock()
         self.font_large = pygame.font.SysFont("monospace", 36, bold=True)
         self.font_small = pygame.font.SysFont("monospace", 20)
@@ -80,12 +80,20 @@ class Game:
         return drone_speed, bullet_speed, spawn_interval, spawn_count
 
     def _update(self):
+        keys = pygame.key.get_pressed()
+        dx = dy = 0
+        if keys[pygame.K_LEFT]  or keys[pygame.K_a]: dx -= 1
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]: dx += 1
+        if keys[pygame.K_UP]    or keys[pygame.K_w]: dy -= 1
+        if keys[pygame.K_DOWN]  or keys[pygame.K_s]: dy += 1
+        self._tick(dx, dy)
+
+    def _tick(self, dx, dy):
+        pygame.event.pump()
         self.frame += 1
         self.level = self.frame // (8 * FPS)
-        keys = pygame.key.get_pressed()
 
-        # 玩家移動
-        self.player.update(keys)
+        self.player._move(dx, dy)
 
         # 自動射擊
         if self.frame % int(self.player_fire_interval) == 0:
@@ -126,36 +134,39 @@ class Game:
             star.update()
 
         # 碰撞：玩家子彈打中 Drone
-        hits = pygame.sprite.groupcollide(
-            self.player_bullets, self.enemies, True, True
-        )
+        hits = pygame.sprite.groupcollide(self.player_bullets, self.enemies, True, True)
         kill_count = len(hits)
         self.score += kill_count * DRONE_SCORE
         if kill_count > 0:
             self._add_kills(kill_count)
 
+        hit = False
+        died = False
+
         # 碰撞：Drone 撞到玩家
         hits = pygame.sprite.spritecollide(
-            self.player, self.enemies, True,
-            pygame.sprite.collide_mask
+            self.player, self.enemies, True, pygame.sprite.collide_mask
         )
         if hits and self.player.invincible_frames == 0:
             self.player.hp -= 1
             self.player.invincible_frames = PLAYER_INVINCIBLE_FRAMES
+            hit = True
             if self.player.hp <= 0:
                 self.state = "gameover"
-                return
+                died = True
+                return kill_count, hit, died
 
         # 碰撞：敵人子彈打中玩家
-        hits = pygame.sprite.spritecollide(
-            self.player, self.enemy_bullets, True
-        )
+        hits = pygame.sprite.spritecollide(self.player, self.enemy_bullets, True)
         if hits and self.player.invincible_frames == 0:
             self.player.hp -= 1
             self.player.invincible_frames = PLAYER_INVINCIBLE_FRAMES
+            hit = True
             if self.player.hp <= 0:
                 self.state = "gameover"
-                return
+                died = True
+
+        return kill_count, hit, died
 
     def _draw(self):
         self.screen.fill(BLACK)
@@ -200,76 +211,7 @@ class Game:
         pygame.draw.rect(self.screen, CYAN, (SCREEN_WIDTH - 10 - bar_total, 50, filled,    6))
 
     def _update_ai(self, dx, dy):
-        pygame.event.pump()
-        self.frame += 1
-        self.level = self.frame // (8 * FPS)
-
-        self.player._move(dx, dy)
-
-        if self.frame % int(self.player_fire_interval) == 0:
-            positions = (
-                [self.player.rect.centerx - 8, self.player.rect.centerx + 8]
-                if self.player_level >= 4
-                else [self.player.rect.centerx]
-            )
-            for x in positions:
-                bullet = PlayerBullet(x, self.player.rect.top, speed=self.player_bullet_speed)
-                self.player_bullets.add(bullet)
-                self.all_sprites.add(bullet)
-
-        drone_speed, bullet_speed, spawn_interval, spawn_count = self._level_params()
-        if self.frame % spawn_interval == 0:
-            section_w = (SCREEN_WIDTH - 40) // spawn_count
-            for i in range(spawn_count):
-                x = 20 + i * section_w + random.randint(10, section_w - 10)
-                drone = Drone(x=x, speed=drone_speed)
-                self.enemies.add(drone)
-                self.all_sprites.add(drone)
-
-        self.player_bullets.update()
-        self.enemy_bullets.update()
-
-        self.enemies.update()
-        for drone in self.enemies:
-            bullet = drone.try_shoot(bullet_speed=bullet_speed)
-            if bullet:
-                self.enemy_bullets.add(bullet)
-                self.all_sprites.add(bullet)
-
-        for star in self.stars:
-            star.update()
-
-        hits = pygame.sprite.groupcollide(self.player_bullets, self.enemies, True, True)
-        kill_count = len(hits)
-        self.score += kill_count * DRONE_SCORE
-        if kill_count > 0:
-            self._add_kills(kill_count)
-
-        hit = False
-        died = False
-
-        hits = pygame.sprite.spritecollide(
-            self.player, self.enemies, True, pygame.sprite.collide_mask
-        )
-        if hits and self.player.invincible_frames == 0:
-            self.player.hp -= 1
-            self.player.invincible_frames = PLAYER_INVINCIBLE_FRAMES
-            hit = True
-            if self.player.hp <= 0:
-                self.state = "gameover"
-                died = True
-                return kill_count, hit, died
-
-        hits = pygame.sprite.spritecollide(self.player, self.enemy_bullets, True)
-        if hits and self.player.invincible_frames == 0:
-            self.player.hp -= 1
-            self.player.invincible_frames = PLAYER_INVINCIBLE_FRAMES
-            hit = True
-            if self.player.hp <= 0:
-                self.state = "gameover"
-                died = True
-
-        return kill_count, hit, died
+        return self._tick(dx, dy)
 
     def _draw_objects(self, surface):
         surface.fill(BLACK)

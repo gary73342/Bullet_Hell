@@ -88,13 +88,13 @@ def render(self)  → 訓練時關閉，展示時開啟
 | 版本 | 觀測方式 | Shape | Policy |
 |------|----------|-------|--------|
 | Baseline | 向量（玩家座標、子彈相對位置等） | (23,) | MlpPolicy |
-| CNN n=1 | 彩色截圖 | (3, 84, 112) | CnnPolicy |
-| CNN n=4 ✓ | 彩色截圖 × frame stacking | (12, 84, 112) | CnnPolicy |
+| CNN n=1 | 彩色截圖 | (3, 112, 84) | CnnPolicy |
+| CNN n=4 ✓ | 彩色截圖 × frame stacking | (12, 112, 84) | CnnPolicy |
 
 **確定規格：**
 - 解析度：**84×112**（保留 3:4 比例，由 480×640 縮小）
 - 色彩：**RGB**（顏色有語義，不使用灰階）
-- Frame Stacking：**4 幀**，shape `(12, 84, 112)`，PyTorch channel-first
+- Frame Stacking：**4 幀**，shape `(12, 112, 84)`，PyTorch channel-first
 - Frame Skip：**4**（每 4 幀做一次決策，等效 15 次/秒）
 - HUD 處理：使用 **offscreen surface**，觀測畫面不含 HUD；HP、分數等透過 `info` dict 傳遞
 
@@ -132,20 +132,45 @@ reward += +0.02 * (1 - dist / max_dist)  # 靠近甜蜜點獎勵
 
 **演算法：** PPO（Proximal Policy Optimization）
 
-**套件：** 待定（SB3 或自行實作）
+**套件：** SB3（第一階段）→ 視時間決定是否換成手刻 PyTorch PPO
 
-- 若使用 SB3：直接呼叫 `PPO("CnnPolicy", env)`，CNN 架構可自訂
-- 若自行實作：使用 PyTorch 手刻 CNN + PPO，完整控制所有細節
-
-**CNN 架構（參考 NatureCNN）**
+**資料流**
 
 ```
-Input (H, W, C)
-  → Conv2d(C,  32, kernel=8, stride=4) + ReLU
+train.py
+  └─ make_env()
+       └─ BulletHellEnv(render_mode=None)      ← env/bullet_hell_env.py
+            └─ Game(headless=True)              ← game/game.py
+SB3 PPO 每個 timestep：
+  → env.step(action)
+       → game._tick(dx, dy) × 4
+       → _capture_frame() → numpy array
+       → RewardCalculator.calculate()
+  ← (obs, reward, done, info)
+  → CNN forward pass（GPU）
+  → PPO update
+```
+
+**超參數**
+
+| 參數 | 值 |
+|---|---|
+| n_steps | 2048 |
+| batch_size | 64 |
+| n_epochs | 10 |
+| learning_rate | 2.5e-4 |
+| gamma | 0.99 |
+| clip_range | 0.2 |
+| total_timesteps | 1M（驗證）→ 3M（正式） |
+
+**CNN 架構（SB3 內建 NatureCNN）**
+
+```
+Input (12, 112, 84)  ← 4 幀 × RGB，channel-first
+  → Conv2d(12, 32, kernel=8, stride=4) + ReLU
   → Conv2d(32, 64, kernel=4, stride=2) + ReLU
   → Conv2d(64, 64, kernel=3, stride=1) + ReLU
-  → Flatten
-  → Linear(?, 512)
+  → Flatten → Linear(?, 512)
   → Actor head（輸出動作機率）
   → Critic head（輸出狀態價值）
 ```
@@ -154,42 +179,25 @@ Input (H, W, C)
 
 疊 **4 幀**讓 CNN 推斷子彈速度與方向，並搭配 **Frame Skip = 4**（環境層參數，訓練與推論均生效）
 
-**Curriculum Learning**
+**Curriculum Learning（暫時跳過）**
 
-逐步提升難度，避免 agent 一開始面對過難環境：
+第一版使用固定難度（遊戲內建 STAGE 系統自動提升），目標先達到超越人類水準。
+課程學習留待 baseline 跑通後再加入。規劃階段如下：
 
 - 階段一：只有 Drone + 直線彈，低密度
 - 階段二：加入 Shooter + 扇形 / 瞄準彈
 - 階段三：加入 Sniper + 螺旋彈
-- 階段四：全敵人 + 高密度彈幕
-- 階段五：Boss 關卡
 
-觸發條件待定（固定步數 or 依表現自動升級）
 
 #### 4. 展示層
 
-```python
-model = PPO.load("bullet_hell_agent")
-obs, _ = env.reset()
-while True:
-    action, _ = model.predict(obs)
-    obs, reward, done, _, _ = env.step(action)
-    if done:
-        obs, _ = env.reset()
-```
+執行 `evaluate.py`，載入訓練好的模型並開視窗顯示 agent 遊玩畫面。
+
+每局結束於終端機印出 score、hp、total reward。
 
 ---
 
 ## 三、實驗設計
-
-### 對照實驗
-
-| 實驗 | 變數 | 目的 |
-|------|------|------|
-| MLP vs CNN | 觀測方式（向量 vs pixel） | 驗證 CNN 在 Sniper 警示線等空間特徵上的優勢 |
-| CNN n=1 vs n=4 | Frame stacking 幀數 | 驗證速度資訊對閃避的影響 |
-| Curriculum vs Non-curriculum | 有無課程學習 | 驗證逐步升難度對最終表現的影響 |
-| Reward ablation | 純存活 vs 存活 + 擊殺 | 驗證 reward 設計對行為的影響 |
 
 ### 評估指標
 
@@ -200,43 +208,6 @@ while True:
 
 ---
 
-## 四、時間排程（2 週）
-
-### 第一週：環境建置 + Baseline
-
-| 天數 | 工作項目 | 負責 |
-|------|----------|------|
-| Day 1–2 | 安裝環境（Python、Pygame、Gymnasium、SB3 / PyTorch） | 雙人 |
-| Day 2–4 | 開發 Pygame 遊戲（玩家、子彈、敵人基本邏輯） | 人 A |
-| Day 4–5 | 設計 Gym 包裝層（reset / step / reward） | 人 B |
-| Day 6 | 第一次訓練跑通（MLP baseline） | 雙人 |
-| Day 7 | 驗證 baseline reward 曲線上升，確認環境正確 | 雙人 |
-
-### 第二週：實驗 + 報告
-
-| 天數 | 工作項目 | 負責 |
-|------|----------|------|
-| Day 8–9 | CNN 版本訓練 + Curriculum Learning 實作 | 人 A |
-| Day 10–11 | 對照實驗（frame stacking、reward ablation） | 人 B |
-| Day 12 | 收集數據、繪製訓練曲線與結果圖表 | 雙人 |
-| Day 12–13 | 撰寫期末報告 | 雙人 |
-| Day 13–14 | 製作簡報 + 錄製 Demo 影片 | 雙人 |
-
----
-
-## 五、待決定事項
-
-以下細節尚未確定，後續討論後補上：
-
-- [ ] 遊戲視窗解析度
-- [x] 觀測解析度 → **84×112**
-- [x] Frame stacking 幀數 → **4 幀**，Frame Skip → **4**
-- [ ] 訓練套件（SB3 or 自行實作 PPO）
-- [ ] CNN 架構細節（filter 數、是否加 BatchNorm）
-- [ ] Curriculum 升級觸發條件（固定步數 or 依表現）
-- [ ] 兩人分工細節
-
----
 
 
 *最後更新：2026-06-02*
