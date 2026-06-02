@@ -31,7 +31,7 @@ PLAYER_FIRE_INTERVAL   = 8    # 每幾幀射一顆
 DRONE_SPEED   = 2
 DRONE_HP      = 1
 DRONE_SCORE   = 100
-DRONE_SPAWN_INTERVAL = 90   # 每幾幀生成一隻（60fps → 約1.5秒）
+DRONE_SPAWN_INTERVAL = 70   # 每幾幀生成一隻（60fps → 約1.17秒）
 
 # 敵人子彈
 ENEMY_BULLET_SPEED   = 4

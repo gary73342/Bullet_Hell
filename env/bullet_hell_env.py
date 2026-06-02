@@ -61,7 +61,7 @@ class BulletHellEnv(Env):
         return self._stack_obs(), {}
 
     def step(self, action):
-        dx, dy = ACTION_MAP[action]
+        dx, dy = ACTION_MAP[int(action)]
         kills, hit, died, healed = 0, False, False, False
 
         for _ in range(FRAME_SKIP):

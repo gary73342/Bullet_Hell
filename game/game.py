@@ -1,7 +1,27 @@
 import pygame
 import random
+import math
 from game.settings import *
 from game.entities import Player, Drone, PlayerBullet, EnemyBullet, Star, HealItem,ExplosionParticle
+
+# 編隊模板：每個數字是 X 軸比例（0~1），最少 2 隻
+_FORMATIONS = [
+    [0.2, 0.5, 0.8],
+    [0.3, 0.5, 0.7],
+    [0.35, 0.65],
+    [0.1, 0.5, 0.9],
+    [0.2, 0.4, 0.6, 0.8],
+    [0.15, 0.85],
+    [0.25, 0.75],
+    [0.1, 0.3, 0.7, 0.9],
+    [0.4, 0.6],
+    [0.2, 0.35, 0.65, 0.8],
+    [0.15, 0.4, 0.6, 0.85],
+    [0.3, 0.7],
+    # 大波次（5～6 隻）
+    [0.1, 0.25, 0.5, 0.75, 0.9],
+    [0.15, 0.3, 0.5, 0.7, 0.85],
+]
 
 
 class Game:
@@ -40,7 +60,8 @@ class Game:
         self.player_bullets = pygame.sprite.Group()
         self.enemy_bullets  = pygame.sprite.Group()
         self.heal_items     = pygame.sprite.Group()
-        self.explosions     = pygame.sprite.Group()  # ─── 新增：爆炸粒子群組 ─── # 新增補血包群組
+        self.explosions     = pygame.sprite.Group()
+        self._next_spawn    = 0
         self.score              = 0
         self.frame              = 0
         self.level              = 0
@@ -78,8 +99,7 @@ class Game:
         drone_speed    = DRONE_SPEED + lv * 0.25
         bullet_speed   = ENEMY_BULLET_SPEED + lv * 0.25
         spawn_interval = max(50, DRONE_SPAWN_INTERVAL - lv * 4)
-        spawn_count    = min(3, 2 + lv // 3)
-        return drone_speed, bullet_speed, spawn_interval, spawn_count
+        return drone_speed, bullet_speed, spawn_interval
 
     def _update(self):
         keys = pygame.key.get_pressed()
@@ -109,23 +129,21 @@ class Game:
                 self.player_bullets.add(bullet)
                 self.all_sprites.add(bullet)
 
-        # ─── 改動一：隨機化敵機生成（打破排狀規律，製造混亂感） ───
-        drone_speed, bullet_speed, spawn_interval, spawn_count = self._level_params()
-        
-        # 基礎計時到達，或者在基礎時間點前後有 15% 的機率額外突襲生成
-        if self.frame % spawn_interval == 0 or (self.frame % (spawn_interval // 2) == 0 and random.random() < 0.5):
-            # 隨機決定這一波實際生成的數量（例如：原本要生 3 隻，隨機變成生 1~4 隻）
-            actual_spawn_count = random.randint(1, spawn_count + 1)
-            
-            for _ in range(actual_spawn_count):
-                # 讓 X 座標在全螢幕範圍內完全隨機（留 20px 邊距）
-                x = random.randint(20, SCREEN_WIDTH - 20)
+        drone_speed, bullet_speed, spawn_interval = self._level_params()
+
+        # Formation 模式：指數分布決定下波時機，隨機挑編隊模板
+        if self.frame >= self._next_spawn:
+            formation = random.choice(_FORMATIONS)
+            for ratio in formation:
+                jitter = random.uniform(-0.05, 0.05)
+                x = int(SCREEN_WIDTH * max(0.05, min(0.95, ratio + jitter)))
                 drone = Drone(x=x, speed=drone_speed)
                 self.enemies.add(drone)
                 self.all_sprites.add(drone)
+            self._next_spawn = self.frame + int(random.uniform(spawn_interval * 0.5, spawn_interval * 1.5))
 
 
-        # 新增：每 10 秒 (600幀) 以 0.5 機率生成補血包 
+        # 新增：每 5 秒 (300幀) 以 0.5 機率生成補血包
         if self.frame % HEAL_DROP_INTERVAL == 0:
             if random.random() < 0.5:
                 heal_item = HealItem()
@@ -173,10 +191,13 @@ class Game:
         died = False
         healed = False  # 新增：紀錄本步是否吃到補血
 
-        heal_hits = pygame.sprite.spritecollide(self.player, self.heal_items, True)
+        heal_hits = [item for item in self.heal_items if self.player.rect.colliderect(item.rect)]
         if heal_hits:
+            for item in heal_hits:
+                item.kill()
+            old_hp = self.player.hp
             self.player.hp = min(PLAYER_HP, self.player.hp + HEAL_ITEM_HP_RESTORE)
-            healed = True
+            healed = self.player.hp > old_hp
 
         # 碰撞：Drone 撞到玩家
         hits = pygame.sprite.spritecollide(
@@ -197,8 +218,8 @@ class Game:
         hit_bullets = [b for b in self.enemy_bullets if self.player.hitbox.colliderect(b.rect)]
         
         if hit_bullets and self.player.invincible_frames == 0:
-            # 刪除打中核心的那顆子彈
-            hit_bullets[0].kill() 
+            for b in hit_bullets:
+                b.kill()
             
             self.player.hp -= 1
             self.player.invincible_frames = PLAYER_INVINCIBLE_FRAMES

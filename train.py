@@ -4,7 +4,7 @@ from stable_baselines3.common.monitor import Monitor
 
 from env import BulletHellEnv
 
-TOTAL_TIMESTEPS = 3_000_000
+TOTAL_TIMESTEPS = 1_000_000
 SAVE_FREQ       = 100_000
 MODEL_DIR       = "models"
 MODEL_NAME      = "ppo_bullet_hell"

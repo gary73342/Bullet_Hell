@@ -15,6 +15,8 @@ class Player(pygame.sprite.Sprite):
         self.rect.bottom  = SCREEN_HEIGHT - 30
         self.hp = PLAYER_HP
         self.invincible_frames = 0
+        self.hitbox = pygame.Rect(0, 0, 8, 8)
+        self.hitbox.center = self.rect.center
 
     def _make_surface(self):
         surf = pygame.Surface((36, 40), pygame.SRCALPHA)
@@ -66,7 +68,7 @@ class Drone(pygame.sprite.Sprite):
 
         # ─── 新增：用於計算左右搖擺的正弦波參數 ───
         self.wave_offset = random.uniform(0, 50) # 隨機初始相位，讓每隻走位錯開
-        self.wave_amplitude = random.randint(2, 5) # 左右搖擺的幅度（像素）
+        self.wave_amplitude = random.randint(1, 3) # 左右搖擺的幅度（像素）
 
     def _make_surface(self):
         surf = pygame.Surface((32, 32), pygame.SRCALPHA)

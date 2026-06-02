@@ -41,7 +41,7 @@ class RewardCalculator:
         if died:
             reward += REWARD_DEATH
 
-            # ─── 新增補血獎勵邏輯 ───
+        # 補血獎勵
         if healed:
             reward += REWARD_HEAL
 
