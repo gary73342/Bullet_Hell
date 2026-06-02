@@ -29,7 +29,9 @@ class Player(pygame.sprite.Sprite):
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]: dx += 1
         if keys[pygame.K_UP]    or keys[pygame.K_w]: dy -= 1
         if keys[pygame.K_DOWN]  or keys[pygame.K_s]: dy += 1
+        self._move(dx, dy)
 
+    def _move(self, dx, dy):
         if dx != 0 and dy != 0:
             self.rect.x += int(dx * PLAYER_SPEED * 0.7071)
             self.rect.y += int(dy * PLAYER_SPEED * 0.7071)

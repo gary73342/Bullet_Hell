@@ -83,32 +83,50 @@ def step(self, action)  → 執行動作，回傳 (obs, reward, done, info)
 def render(self)  → 訓練時關閉，展示時開啟
 ```
 
-**觀測空間（待定）**
+**觀測空間**
 
 | 版本 | 觀測方式 | Shape | Policy |
 |------|----------|-------|--------|
 | Baseline | 向量（玩家座標、子彈相對位置等） | (23,) | MlpPolicy |
-| CNN n=1 | 彩色截圖 | (H, W, 3) | CnnPolicy |
-| CNN n=4 | 彩色截圖 × frame stacking | (H, W, 12) | CnnPolicy |
+| CNN n=1 | 彩色截圖 | (3, 84, 112) | CnnPolicy |
+| CNN n=4 ✓ | 彩色截圖 × frame stacking | (12, 84, 112) | CnnPolicy |
 
-解析度待定，候選：84×112、120×160、168×224（依遊戲視窗比例等比縮小）
+**確定規格：**
+- 解析度：**84×112**（保留 3:4 比例，由 480×640 縮小）
+- 色彩：**RGB**（顏色有語義，不使用灰階）
+- Frame Stacking：**4 幀**，shape `(12, 84, 112)`，PyTorch channel-first
+- Frame Skip：**4**（每 4 幀做一次決策，等效 15 次/秒）
+- HUD 處理：使用 **offscreen surface**，觀測畫面不含 HUD；HP、分數等透過 `info` dict 傳遞
 
 **動作空間**
 
 ```
-Discrete(5)：不動 / 上 / 下 / 左 / 右
+Discrete(9)：
+0: 不動
+1: 上      2: 下
+3: 左      4: 右
+5: 左上    6: 右上
+7: 左下    8: 右下
 射擊設為自動，不佔動作維度
 ```
 
 **Reward Function**
-目前暫定
+
 ```python
-reward  = +0.01 * 每幀存活        # Rtime：鼓勵活久
-reward += +5.0  * 擊殺普通敵人    # Rkill
-reward += +20.0 * 擊殺 Boss       # Rkill（Boss）
-reward += -10.0 * 被子彈擊中      # Rpenalty
-reward += -50.0 * 死亡            # Rpenalty（終局）
+reward += +5.0  * kills              # 擊殺普通敵人
+reward += -10.0 * hit                # 被子彈擊中
+reward += -50.0 * died               # 死亡（終局）
+reward += -0.5  * (static > 10步)    # 連續靜止懲罰，避免躲角落
+reward += +0.02 * (1 - dist / max_dist)  # 靠近甜蜜點獎勵
 ```
+
+**甜蜜點**：x = 畫面中央（240px），y = 畫面 3/4 處（480px）
+
+**移除項目**：每幀存活 reward（消極求生）、Boss 擊殺 reward（Boss 尚未實作）
+
+**參考論文**：DeepMind DQN (2013, 2015)，論文使用純分數作為 reward + Reward Clipping (±1)。本專題針對自訂遊戲加入輔助 reward，Clipping 留待訓練後視穩定性決定是否加入。
+
+**實作**：`env/reward.py` — `RewardCalculator.calculate(player_x, player_y, kills, hit, died)`
 
 #### 3. 訓練層
 
@@ -134,7 +152,7 @@ Input (H, W, C)
 
 **Frame Stacking**
 
-疊 N 幀讓 CNN 推斷子彈速度與方向，N 待定（候選：2、4）
+疊 **4 幀**讓 CNN 推斷子彈速度與方向，並搭配 **Frame Skip = 4**（環境層參數，訓練與推論均生效）
 
 **Curriculum Learning**
 
@@ -211,8 +229,8 @@ while True:
 以下細節尚未確定，後續討論後補上：
 
 - [ ] 遊戲視窗解析度
-- [ ] 觀測解析度（84×112 / 120×160 / 168×224）
-- [ ] Frame stacking 幀數（2 or 4）
+- [x] 觀測解析度 → **84×112**
+- [x] Frame stacking 幀數 → **4 幀**，Frame Skip → **4**
 - [ ] 訓練套件（SB3 or 自行實作 PPO）
 - [ ] CNN 架構細節（filter 數、是否加 BatchNorm）
 - [ ] Curriculum 升級觸發條件（固定步數 or 依表現）
@@ -221,4 +239,4 @@ while True:
 ---
 
 
-*最後更新：2026 年 5 月*
+*最後更新：2026-06-02*
