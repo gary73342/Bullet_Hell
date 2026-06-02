@@ -14,6 +14,7 @@ REWARD_HIT      = -10.0
 REWARD_DEATH    = -50.0
 REWARD_STATIC   = -0.5
 REWARD_POS_MAX  =  0.02
+REWARD_HEAL = 2.0  # 新增：吃到補血包的獎勵值
 
 STATIC_THRESHOLD = 10   # 連續靜止幾步後才扣分
 
@@ -22,7 +23,7 @@ class RewardCalculator:
     def reset(self):
         self._static_steps = 0
 
-    def calculate(self, player_x, player_y, kills, hit, died, dx, dy):
+    def calculate(self, player_x, player_y, kills, hit, died, dx, dy, healed):
         """
         每個 env step 呼叫一次（frame skip 結束後）。
         kills : int  — 這個 step 內擊殺的敵人數
@@ -39,6 +40,10 @@ class RewardCalculator:
 
         if died:
             reward += REWARD_DEATH
+
+            # ─── 新增補血獎勵邏輯 ───
+        if healed:
+            reward += REWARD_HEAL
 
         # 靜止懲罰：只在真正選擇不動時累積（貼牆但有移動輸入不算）
         if dx == 0 and dy == 0:

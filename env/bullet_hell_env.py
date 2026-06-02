@@ -62,13 +62,14 @@ class BulletHellEnv(Env):
 
     def step(self, action):
         dx, dy = ACTION_MAP[action]
-        kills, hit, died = 0, False, False
+        kills, hit, died, healed = 0, False, False, False
 
         for _ in range(FRAME_SKIP):
-            k, h, d    = self._game_step(dx, dy)
+            k, h, d, hl = self._game_step(dx, dy)
             kills     += k
             hit        = hit or h
             died       = died or d
+            healed     = healed or hl  # 只要 frame skip 期間有一次吃到就演算法認定吃到
             if died:
                 break
 
@@ -78,7 +79,7 @@ class BulletHellEnv(Env):
             player_x=self._game.player.rect.centerx,
             player_y=self._game.player.rect.centery,
             kills=kills, hit=hit, died=died,
-            dx=dx, dy=dy,
+            dx=dx, dy=dy, healed=healed,  # 新增：將吃到補血的資訊傳給 reward calculator
         )
 
         if self.render_mode == "human":

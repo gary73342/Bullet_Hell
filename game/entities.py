@@ -1,5 +1,6 @@
 import pygame
 import random
+import math  # ─── 新增 import ───
 from game.settings import *
 
 
@@ -41,6 +42,10 @@ class Player(pygame.sprite.Sprite):
 
         self.rect.clamp_ip(pygame.Rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
 
+        # ─── 新增：讓 hitbox 永遠跟隨戰機的中心點，大小縮到 8x8 ───
+        self.hitbox = pygame.Rect(0, 0, 8, 8)
+        self.hitbox.center = self.rect.center
+
         if self.invincible_frames > 0:
             self.invincible_frames -= 1
             self.image = self._orig_image if (self.invincible_frames // 5) % 2 == 0 else self._blank_image
@@ -59,6 +64,10 @@ class Drone(pygame.sprite.Sprite):
         self.hp     = DRONE_HP
         self._fire_timer = random.randint(0, DRONE_FIRE_INTERVAL)
 
+        # ─── 新增：用於計算左右搖擺的正弦波參數 ───
+        self.wave_offset = random.uniform(0, 50) # 隨機初始相位，讓每隻走位錯開
+        self.wave_amplitude = random.randint(2, 5) # 左右搖擺的幅度（像素）
+
     def _make_surface(self):
         surf = pygame.Surface((32, 32), pygame.SRCALPHA)
         # 倒三角機身
@@ -69,6 +78,15 @@ class Drone(pygame.sprite.Sprite):
 
     def update(self):
         self.rect.y += self.speed
+
+        # ─── 新增：讓 X 座標隨時間做 Sine 波形搖擺 ───
+        # 藉由 current_frame 引入點時間差，做出漂亮的弧形下落
+        self.rect.x += int(math.sin(self.rect.y * 0.012 + self.wave_offset) * self.wave_amplitude)
+        
+        # 限制不要飛出牆外
+        if self.rect.left < 0: self.rect.left = 0
+        if self.rect.right > SCREEN_WIDTH: self.rect.right = SCREEN_WIDTH
+
         self._fire_timer += 1
         if self.rect.top > SCREEN_HEIGHT + 10:
             self.kill()
@@ -85,7 +103,7 @@ class EnemyBullet(pygame.sprite.Sprite):
     def __init__(self, x, y, speed=None):
         super().__init__()
         self.speed = speed if speed is not None else ENEMY_BULLET_SPEED
-        self.image = pygame.Surface((6, 16), pygame.SRCALPHA)
+        self.image = pygame.Surface((12, 24), pygame.SRCALPHA)
         self.image.fill(PINK)
         self.rect  = self.image.get_rect(centerx=x, top=y)
 
@@ -109,6 +127,31 @@ class PlayerBullet(pygame.sprite.Sprite):
             self.kill()
 
 
+class HealItem(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.speed = HEAL_ITEM_SPEED
+        self.image = self._make_surface()
+        self.rect  = self.image.get_rect()
+        # 隨機在畫面水平範圍內生成，留 20px 邊距避免貼邊
+        self.rect.centerx = random.randint(20, SCREEN_WIDTH - 20)
+        self.rect.y = -32
+
+    def _make_surface(self):
+        # 建立 24x24 帶 Alpha 通道的畫布
+        surf = pygame.Surface((24, 24), pygame.SRCALPHA)
+        # 繪製綠色十字：先畫橫矩形，再畫直矩形
+        pygame.draw.rect(surf, GREEN, (0, 8, 24, 8))
+        pygame.draw.rect(surf, GREEN, (8, 0, 8, 24))
+        return surf
+
+    def update(self):
+        self.rect.y += self.speed
+        # 超出畫面底部則自動刪除
+        if self.rect.top > SCREEN_HEIGHT + 10:
+            self.kill()
+
+
 class Star:
     def __init__(self, randomize_y=True):
         self.reset(randomize_y)
@@ -128,3 +171,41 @@ class Star:
         brightness = 100 + self.speed * 50
         color = (brightness, brightness, brightness)
         pygame.draw.circle(surface, color, (int(self.x), int(self.y)), self.size)
+
+
+class ExplosionParticle(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        # 隨機散射角度 (0 ~ 2*pi) 與速度 (2 ~ 5)
+        angle = random.uniform(0, 2 * math.pi)
+        speed = random.uniform(2, 5)
+        self.vx = math.cos(angle) * speed
+        self.vy = math.sin(angle) * speed
+        
+        # 初始隨機大小 (3 ~ 6 像素)
+        self.size = random.randint(3, 6)
+        self.lifetime = random.randint(15, 25)  # 存活幀數
+        
+        self.image = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        self.image.fill(ORANGE)
+        self.rect = self.image.get_rect(center=(x, y))
+
+    def update(self):
+        # 依速度移動
+        self.rect.x += int(self.vx)
+        self.rect.y += int(self.vy)
+        
+        # 生命週期遞減
+        self.lifetime -= 1
+        if self.lifetime <= 0:
+            self.kill()
+        else:
+            # 隨時間縮小粒子
+            new_size = max(1, int(self.size * (self.lifetime / 20)))
+            if new_size != self.size:
+                self.size = new_size
+                self.image = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+                self.image.fill(ORANGE)
+                # 保持中心點不變
+                cx, cy = self.rect.center
+                self.rect = self.image.get_rect(center=(cx, cy))

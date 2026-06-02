@@ -14,10 +14,12 @@ RED        = (220, 50,  50)    # 敵方戰機
 YELLOW     = (255, 230, 0)     # 我方子彈（之後用）
 PINK       = (255, 80,  160)   # 敵方子彈（之後用）
 GRAY       = (160, 160, 160)   # UI 文字
+GREEN      = (0,   255, 0)     # 補血包 (新創)
+ORANGE     = (255, 128, 0)     # 爆炸粒子顏色
 
 # 玩家
-PLAYER_SPEED     = 5
-PLAYER_HP        = 10
+PLAYER_SPEED     = 7
+PLAYER_HP        = 5
 PLAYER_MAX_LEVEL = 6
 PLAYER_KILLS_PER_LEVEL = 15
 
@@ -42,3 +44,14 @@ STAR_SPEED_MAX = 3
 
 # 玩家無敵幀
 PLAYER_INVINCIBLE_FRAMES = 45   # 0.75 秒（60fps × 0.75）
+
+# 補血包
+HEAL_ITEM_SPEED         = 2
+HEAL_ITEM_HP_RESTORE = 5       # 補血量
+HEAL_DROP_INTERVAL = 300       # 每 5 秒判定一次
+
+# HEALTH_PACK_SIZE          = 20
+# HEALTH_PACK_COLOR         = (0, 255, 0)
+# HEALTH_PACK_LIFETIME      = 600  # 存在幾幀（60fps → 約10秒）
+# HEALTH_PACK_SPAWN_CHANCE   = 0.5  # 每次生成有多大機率出現補血包
+# HEALTH_PACK_MAX_ON_SCREEN   = 2    # 同時最多存在幾個補血包

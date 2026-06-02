@@ -1,7 +1,7 @@
 import pygame
 import random
 from game.settings import *
-from game.entities import Player, Drone, PlayerBullet, EnemyBullet, Star
+from game.entities import Player, Drone, PlayerBullet, EnemyBullet, Star, HealItem,ExplosionParticle
 
 
 class Game:
@@ -39,6 +39,8 @@ class Game:
         self.enemies      = pygame.sprite.Group()
         self.player_bullets = pygame.sprite.Group()
         self.enemy_bullets  = pygame.sprite.Group()
+        self.heal_items     = pygame.sprite.Group()
+        self.explosions     = pygame.sprite.Group()  # ─── 新增：爆炸粒子群組 ─── # 新增補血包群組
         self.score              = 0
         self.frame              = 0
         self.level              = 0
@@ -68,15 +70,15 @@ class Game:
             self.player_kills -= PLAYER_KILLS_PER_LEVEL
             self.player_level += 1
             self.player.hp = min(PLAYER_HP, self.player.hp + PLAYER_HP // 2)
-            self.player_fire_interval = max(2, self.player_fire_interval / 1.2)
-            self.player_bullet_speed += 2
+            self.player_fire_interval = max(2, self.player_fire_interval / 1.05)
+            self.player_bullet_speed += 1
 
     def _level_params(self):
         lv = self.level
-        drone_speed    = DRONE_SPEED + lv * 0.5
-        bullet_speed   = ENEMY_BULLET_SPEED + lv * 0.5
-        spawn_interval = max(40, DRONE_SPAWN_INTERVAL - lv * 8)
-        spawn_count    = min(5, 2 + lv // 2)
+        drone_speed    = DRONE_SPEED + lv * 0.25
+        bullet_speed   = ENEMY_BULLET_SPEED + lv * 0.25
+        spawn_interval = max(50, DRONE_SPAWN_INTERVAL - lv * 4)
+        spawn_count    = min(3, 2 + lv // 3)
         return drone_speed, bullet_speed, spawn_interval, spawn_count
 
     def _update(self):
@@ -86,12 +88,12 @@ class Game:
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]: dx += 1
         if keys[pygame.K_UP]    or keys[pygame.K_w]: dy -= 1
         if keys[pygame.K_DOWN]  or keys[pygame.K_s]: dy += 1
-        self._tick(dx, dy)
+        kill_count, hit, died, healed = self._tick(dx, dy)
 
     def _tick(self, dx, dy):
         pygame.event.pump()
         self.frame += 1
-        self.level = self.frame // (8 * FPS)
+        self.level = self.frame // (10 * FPS)
 
         self.player._move(dx, dy)
 
@@ -107,15 +109,28 @@ class Game:
                 self.player_bullets.add(bullet)
                 self.all_sprites.add(bullet)
 
-        # 生成 Drone（依 level 調整生成間隔與數量）
+        # ─── 改動一：隨機化敵機生成（打破排狀規律，製造混亂感） ───
         drone_speed, bullet_speed, spawn_interval, spawn_count = self._level_params()
-        if self.frame % spawn_interval == 0:
-            section_w = (SCREEN_WIDTH - 40) // spawn_count
-            for i in range(spawn_count):
-                x = 20 + i * section_w + random.randint(10, section_w - 10)
+        
+        # 基礎計時到達，或者在基礎時間點前後有 15% 的機率額外突襲生成
+        if self.frame % spawn_interval == 0 or (self.frame % (spawn_interval // 2) == 0 and random.random() < 0.5):
+            # 隨機決定這一波實際生成的數量（例如：原本要生 3 隻，隨機變成生 1~4 隻）
+            actual_spawn_count = random.randint(1, spawn_count + 1)
+            
+            for _ in range(actual_spawn_count):
+                # 讓 X 座標在全螢幕範圍內完全隨機（留 20px 邊距）
+                x = random.randint(20, SCREEN_WIDTH - 20)
                 drone = Drone(x=x, speed=drone_speed)
                 self.enemies.add(drone)
                 self.all_sprites.add(drone)
+
+
+        # 新增：每 10 秒 (600幀) 以 0.5 機率生成補血包 
+        if self.frame % HEAL_DROP_INTERVAL == 0:
+            if random.random() < 0.5:
+                heal_item = HealItem()
+                self.heal_items.add(heal_item)
+                self.all_sprites.add(heal_item)
 
         # 子彈移動
         self.player_bullets.update()
@@ -123,6 +138,10 @@ class Game:
 
         # 敵人移動 + 射擊
         self.enemies.update()
+        self.heal_items.update() # 新增：更新補血包位置
+        # ─── 補上這行：讓爆炸粒子開始計算散射、縮小與消失 ───
+        self.explosions.update()
+
         for drone in self.enemies:
             bullet = drone.try_shoot(bullet_speed=bullet_speed)
             if bullet:
@@ -135,13 +154,29 @@ class Game:
 
         # 碰撞：玩家子彈打中 Drone
         hits = pygame.sprite.groupcollide(self.player_bullets, self.enemies, True, True)
-        kill_count = len(hits)
-        self.score += kill_count * DRONE_SCORE
+        kill_count = 0
+        
+        for bullet, enemy_list in hits.items():
+            for drone in enemy_list:
+                kill_count += 1
+                self.score += DRONE_SCORE
+                
+                # ─── 新增：在被擊中的敵機中心點生成 12 個隨機噴散的爆炸粒子 ───
+                for _ in range(12):
+                    p = ExplosionParticle(drone.rect.centerx, drone.rect.centery)
+                    self.explosions.add(p)
+                    self.all_sprites.add(p)
         if kill_count > 0:
             self._add_kills(kill_count)
 
         hit = False
         died = False
+        healed = False  # 新增：紀錄本步是否吃到補血
+
+        heal_hits = pygame.sprite.spritecollide(self.player, self.heal_items, True)
+        if heal_hits:
+            self.player.hp = min(PLAYER_HP, self.player.hp + HEAL_ITEM_HP_RESTORE)
+            healed = True
 
         # 碰撞：Drone 撞到玩家
         hits = pygame.sprite.spritecollide(
@@ -154,11 +189,17 @@ class Game:
             if self.player.hp <= 0:
                 self.state = "gameover"
                 died = True
-                return kill_count, hit, died
+                return kill_count, hit, died, healed
 
-        # 碰撞：敵人子彈打中玩家
-        hits = pygame.sprite.spritecollide(self.player, self.enemy_bullets, True)
-        if hits and self.player.invincible_frames == 0:
+        # 碰撞：敵人子彈打中玩家的核心 Hitbox
+        # 原本是：pygame.sprite.spritecollide(self.player, self.enemy_bullets, True)
+        # ─── 修改為自訂碰撞區域 ───
+        hit_bullets = [b for b in self.enemy_bullets if self.player.hitbox.colliderect(b.rect)]
+        
+        if hit_bullets and self.player.invincible_frames == 0:
+            # 刪除打中核心的那顆子彈
+            hit_bullets[0].kill() 
+            
             self.player.hp -= 1
             self.player.invincible_frames = PLAYER_INVINCIBLE_FRAMES
             hit = True
@@ -166,7 +207,7 @@ class Game:
                 self.state = "gameover"
                 died = True
 
-        return kill_count, hit, died
+        return kill_count, hit, died, healed
 
     def _draw(self):
         self.screen.fill(BLACK)
@@ -215,9 +256,9 @@ class Game:
 
     def _draw_objects(self, surface):
         surface.fill(BLACK)
-        for star in self.stars:
-            star.draw(surface)
-        self.all_sprites.draw(surface)
+        # ─── 移除了 for star in self.stars: star.draw(surface) ───
+        # 這樣 Agent 隱藏畫布就不會看到無意義的星星雜訊，背景保持全黑
+        self.all_sprites.draw(surface) # 畫布只保留戰機、敵機、子彈、補血包
 
     def _gameover_screen(self):
         go_surf    = self.font_large.render("GAME OVER", True, RED)
