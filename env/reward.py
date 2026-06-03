@@ -13,7 +13,7 @@ _MAX_DIST = math.hypot(SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.75)
 
 # Reward 數值微調
 REWARD_KILL     =  5.0
-REWARD_HIT      = -10.0
+REWARD_HIT_BASE = -4.0   # 前期基礎值，每升 5 級再 -2
 REWARD_DEATH    = -50.0
 REWARD_HEAL     =  2.0     
 REWARD_STATIC   = -1.0     # ─── 提高靜止懲罰 (-0.5 -> -1.0) ───
@@ -26,13 +26,13 @@ STATIC_THRESHOLD = 8       # ─── 縮短靜止容忍步數 (10 -> 8) ──
 # ─── 新增：動作平滑與生存里程碑參數 ───
 REWARD_SMOOTH_PENALTY = -0.1   # 鬼畜抖動的懲罰值（微量扣分）
 REWARD_TIME_MILESTONE = 15.0   # 每活過一個里程碑給的大獎勵
-MILESTONE_FRAMES      = 600    # 里程碑門檻（假設遊戲 60fps，600幀 = 10秒）
+MILESTONE_FRAMES      = 150    # 里程碑門檻（150 env steps × frame_skip 4 = 600 遊戲幀 = 10秒）
 
 class RewardCalculator:
     def reset(self):
         self._static_steps = 0
 
-    def calculate(self, player_x, player_y, kills, hit, died, dx, dy, healed, prev_action, curr_action, current_frame):
+    def calculate(self, player_x, player_y, kills, hit, died, dx, dy, healed, prev_action, curr_action, current_frame, player_level=0):
         """
         每個 env step 呼叫一次（frame skip 結束後）。
         kills : int  — 這個 step 內擊殺的敵人數
@@ -46,7 +46,7 @@ class RewardCalculator:
         reward += REWARD_KILL * kills
 
         if hit:
-            reward += REWARD_HIT
+            reward += REWARD_HIT_BASE - 2.0 * (player_level // 5)
 
         if died:
             reward += REWARD_DEATH
@@ -88,9 +88,9 @@ class RewardCalculator:
         # 假設你的動作定義：0:不動, 1:左, 2:右, 3:上, 4:下（請根據你實際的 action space 對調）
         # 如果上一步向左(1)這步向右(2)，或者上一步向右(2)這步向左(1)，代表在鬼畜抖動
         if prev_action is not None:
-            is_shaking_x = (prev_action == 1 and curr_action == 2) or (prev_action == 2 and curr_action == 1)
-            is_shaking_y = (prev_action == 3 and curr_action == 4) or (prev_action == 4 and curr_action == 3)
-            
+            is_shaking_y = (prev_action == 1 and curr_action == 2) or (prev_action == 2 and curr_action == 1)
+            is_shaking_x = (prev_action == 3 and curr_action == 4) or (prev_action == 4 and curr_action == 3)
+
             if is_shaking_x or is_shaking_y:
                 reward += REWARD_SMOOTH_PENALTY
 

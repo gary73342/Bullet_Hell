@@ -1,3 +1,4 @@
+import os
 import pygame
 import random
 import math
@@ -26,7 +27,15 @@ _FORMATIONS = [
 
 class Game:
     def __init__(self, headless=False):
+        if headless:
+            _saved_driver = os.environ.get("SDL_VIDEODRIVER")
+            os.environ["SDL_VIDEODRIVER"] = "dummy"
         pygame.init()
+        if headless:
+            if _saved_driver is None:
+                os.environ.pop("SDL_VIDEODRIVER", None)
+            else:
+                os.environ["SDL_VIDEODRIVER"] = _saved_driver
         if headless:
             self.screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         else:
