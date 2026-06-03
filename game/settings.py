@@ -36,7 +36,7 @@ DRONE_SPAWN_INTERVAL = 72   # 每幾幀生成一隻（60fps → 約1.2秒）
 # 敵人子彈
 ENEMY_BULLET_SPEED   = 4
 DRONE_FIRE_INTERVAL     = 180  # Drone 初始射擊間隔（幀）
-DRONE_FIRE_INTERVAL_MIN = 45   # 射擊間隔下限
+DRONE_FIRE_INTERVAL_MIN = 60   # 射擊間隔下限
 
 # 星空背景
 STAR_COUNT    = 30

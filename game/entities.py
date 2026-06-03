@@ -14,6 +14,7 @@ class Player(pygame.sprite.Sprite):
         self.rect.centerx = SCREEN_WIDTH // 2
         self.rect.bottom  = SCREEN_HEIGHT - 30
         self.hp = PLAYER_HP
+        self.speed = PLAYER_SPEED
         self.invincible_frames = 0
         self.hitbox = pygame.Rect(0, 0, 32, 8)
         self.hitbox.center = self.rect.center
@@ -36,11 +37,11 @@ class Player(pygame.sprite.Sprite):
 
     def _move(self, dx, dy):
         if dx != 0 and dy != 0:
-            self.rect.x += int(dx * PLAYER_SPEED * 0.7071)
-            self.rect.y += int(dy * PLAYER_SPEED * 0.7071)
+            self.rect.x += int(dx * self.speed * 0.7071)
+            self.rect.y += int(dy * self.speed * 0.7071)
         else:
-            self.rect.x += dx * PLAYER_SPEED
-            self.rect.y += dy * PLAYER_SPEED
+            self.rect.x += dx * self.speed
+            self.rect.y += dy * self.speed
 
         self.rect.clamp_ip(pygame.Rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
 

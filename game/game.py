@@ -71,6 +71,7 @@ class Game:
         self.heal_items     = pygame.sprite.Group()
         self.explosions     = pygame.sprite.Group()
         self._next_spawn    = 0
+        self._fire_timer    = 0
         self.score              = 0
         self.frame              = 0
         self.level              = 0
@@ -93,7 +94,6 @@ class Game:
 
     def _add_kills(self, count):
         if self.player_level >= PLAYER_MAX_LEVEL:
-            self.player_kills = self.player_kills  # 滿級後不再累加觸發
             return
         self.player_kills += count
         while self.player_kills >= PLAYER_KILLS_PER_LEVEL and self.player_level < PLAYER_MAX_LEVEL:
@@ -102,13 +102,14 @@ class Game:
             self.player.hp = min(PLAYER_HP, self.player.hp + PLAYER_HP // 2)
             self.player_fire_interval = max(6, self.player_fire_interval - 0.1)
             self.player_bullet_speed += 1
+            self.player.speed = PLAYER_SPEED + self.player_level // 5
 
     def _level_params(self):
         lv = self.level
-        drone_speed    = DRONE_SPEED + lv * 0.25
-        bullet_speed   = ENEMY_BULLET_SPEED + lv * 0.25
-        spawn_interval = max(15, DRONE_SPAWN_INTERVAL - lv * 3)
-        fire_interval  = max(DRONE_FIRE_INTERVAL_MIN, DRONE_FIRE_INTERVAL - lv * 10)
+        drone_speed    = min(9.0, DRONE_SPEED + lv * 0.25)
+        bullet_speed   = min(11.0, ENEMY_BULLET_SPEED + lv * 0.25)
+        spawn_interval = max(30, DRONE_SPAWN_INTERVAL - lv * 2)
+        fire_interval  = max(DRONE_FIRE_INTERVAL_MIN, DRONE_FIRE_INTERVAL - lv * 6)
         drone_hp       = min(3, 1 + lv // 8)
         return drone_speed, bullet_speed, spawn_interval, fire_interval, drone_hp
 
@@ -119,7 +120,7 @@ class Game:
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]: dx += 1
         if keys[pygame.K_UP]    or keys[pygame.K_w]: dy -= 1
         if keys[pygame.K_DOWN]  or keys[pygame.K_s]: dy += 1
-        kill_count, hit, died, healed = self._tick(dx, dy)
+        kill_count, hit, died, healed, _ = self._tick(dx, dy)
 
     def _tick(self, dx, dy):
         pygame.event.pump()
@@ -129,7 +130,10 @@ class Game:
         self.player._move(dx, dy)
 
         # 自動射擊
-        if self.frame % int(self.player_fire_interval) == 0:
+        self._fire_timer += 1
+        if self._fire_timer >= self.player_fire_interval:
+            self._fire_timer = 0
+        if self._fire_timer == 0:
             positions = (
                 [self.player.rect.centerx - 8, self.player.rect.centerx + 8]
                 if self.player_level >= 10
@@ -154,10 +158,11 @@ class Game:
             self._next_spawn = self.frame + int(random.uniform(spawn_interval * 0.5, spawn_interval * 1.5))
 
 
-        # 等級 10 前每 5 秒，10 級後每 3 秒，以 0.5 機率生成補血包
+        # 等級 10 前每 5 秒，10 級後每 3 秒，機率隨等級提升（0.5 + level * 0.02，上限 0.9）
         heal_interval = 180 if self.level >= 10 else HEAL_DROP_INTERVAL
+        heal_chance = min(0.9, 0.5 + self.level * 0.02)
         if self.frame % heal_interval == 0:
-            if random.random() < 0.5:
+            if random.random() < heal_chance:
                 heal_item = HealItem()
                 self.heal_items.add(heal_item)
                 self.all_sprites.add(heal_item)
@@ -210,10 +215,12 @@ class Game:
         healed = False  # 新增：紀錄本步是否吃到補血
 
         heal_hits = [item for item in self.heal_items if self.player.rect.colliderect(item.rect)]
+        pre_heal_hp = None
         if heal_hits:
             for item in heal_hits:
                 item.kill()
             old_hp = self.player.hp
+            pre_heal_hp = old_hp
             self.player.hp = min(PLAYER_HP, self.player.hp + HEAL_ITEM_HP_RESTORE)
             healed = self.player.hp > old_hp
 
@@ -228,7 +235,7 @@ class Game:
             if self.player.hp <= 0:
                 self.state = "gameover"
                 died = True
-                return kill_count, hit, died, healed
+                return kill_count, hit, died, healed, pre_heal_hp
 
         # 碰撞：敵人子彈打中玩家的核心 Hitbox
         # 原本是：pygame.sprite.spritecollide(self.player, self.enemy_bullets, True)
@@ -246,7 +253,7 @@ class Game:
                 self.state = "gameover"
                 died = True
 
-        return kill_count, hit, died, healed
+        return kill_count, hit, died, healed, pre_heal_hp
 
     def _draw(self):
         self.screen.fill(BLACK)

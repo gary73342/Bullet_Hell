@@ -8,7 +8,7 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 
 from env import BulletHellEnv
 
-TOTAL_TIMESTEPS = 1_000_000
+TOTAL_TIMESTEPS = 8_000_000
 SAVE_FREQ       = 100_000
 MODEL_NAME      = "ppo_bullet_hell"
 N_ENVS          = 4
@@ -35,13 +35,14 @@ if __name__ == "__main__":
     env = VecMonitor(env, filename=os.path.join(run_dir, "monitor"))
 
     model = PPO(
-        policy="CnnPolicy",
+        policy="MultiInputPolicy",
         env=env,
         n_steps=2048,
         batch_size=256,
         n_epochs=10,
         learning_rate=2.5e-4,
-        gamma=0.99,
+        gamma=0.999,
+        gae_lambda=0.90,
         clip_range=0.2,
         tensorboard_log=os.path.join(run_dir, "tensorboard"),
         device="auto",
