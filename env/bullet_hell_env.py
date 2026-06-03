@@ -49,19 +49,30 @@ class BulletHellEnv(Env):
         self._game        = Game(headless=(render_mode != "human"))
         self._offscreen   = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
 
+        # ─── 修正：在實例化時宣告這兩個紀錄變數 ───
+        self.current_frame = 0
+        self.prev_action = None
+
     # ── 公開介面 ──────────────────────────────────────────────────────────
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self._game._reset()
         self._reward_calc.reset()
+
+        # ─── 修正：每局重置時，計數器與歷史動作歸零 ───
+        self.current_frame = 0
+        self.prev_action = None
+
         frame = self._capture_frame()
         for _ in range(N_STACK):
             self._frame_stack.append(frame)
         return self._stack_obs(), {}
 
     def step(self, action):
-        dx, dy = ACTION_MAP[int(action)]
+        # 把 action 轉為整數
+        act_idx = int(action)
+        dx, dy = ACTION_MAP[act_idx]
         kills, hit, died, healed = 0, False, False, False
 
         for _ in range(FRAME_SKIP):
@@ -75,12 +86,19 @@ class BulletHellEnv(Env):
 
         self._frame_stack.append(self._capture_frame())
 
+        # ─── 修正：將 prev_action, curr_action (即 act_idx) 與 current_frame 傳入計算機 ───
         reward = self._reward_calc.calculate(
             player_x=self._game.player.rect.centerx,
             player_y=self._game.player.rect.centery,
             kills=kills, hit=hit, died=died,
-            dx=dx, dy=dy, healed=healed,  # 新增：將吃到補血的資訊傳給 reward calculator
+            dx=dx, dy=dy, healed=healed,
+            prev_action=self.prev_action,
+            curr_action=act_idx,
+            current_frame=self.current_frame
         )
+
+        # ─── 修正：在計算完 Reward 後，把這一步的動作存下來，變成「下一步的上一步」 ───
+        self.prev_action = act_idx
 
         if self.render_mode == "human":
             self.render()
