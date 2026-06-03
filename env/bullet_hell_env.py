@@ -94,11 +94,13 @@ class BulletHellEnv(Env):
             dx=dx, dy=dy, healed=healed,
             prev_action=self.prev_action,
             curr_action=act_idx,
-            current_frame=self.current_frame
+            current_frame=self.current_frame,
+            player_level=self._game.player_level,
         )
 
         # ─── 修正：在計算完 Reward 後，把這一步的動作存下來，變成「下一步的上一步」 ───
         self.prev_action = act_idx
+        self.current_frame += 1
 
         if self.render_mode == "human":
             self.render()
