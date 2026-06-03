@@ -2,7 +2,7 @@ import pygame
 from stable_baselines3 import PPO
 from env import BulletHellEnv
 
-MODEL_PATH = "models/ppo_bullet_hell_final"
+MODEL_PATH = "models/train1/ppo_bullet_hell_final"
 
 
 def evaluate():
