@@ -20,7 +20,7 @@ ORANGE     = (255, 128, 0)     # 爆炸粒子顏色
 # 玩家
 PLAYER_SPEED     = 7
 PLAYER_HP        = 5
-PLAYER_MAX_LEVEL = 6
+PLAYER_MAX_LEVEL = 20
 PLAYER_KILLS_PER_LEVEL = 15
 
 # 玩家子彈
@@ -31,11 +31,12 @@ PLAYER_FIRE_INTERVAL   = 8    # 每幾幀射一顆
 DRONE_SPEED   = 2
 DRONE_HP      = 1
 DRONE_SCORE   = 100
-DRONE_SPAWN_INTERVAL = 70   # 每幾幀生成一隻（60fps → 約1.17秒）
+DRONE_SPAWN_INTERVAL = 72   # 每幾幀生成一隻（60fps → 約1.2秒）
 
 # 敵人子彈
 ENEMY_BULLET_SPEED   = 4
-DRONE_FIRE_INTERVAL  = 90   # Drone 每幾幀射擊一次（各自獨立計時）
+DRONE_FIRE_INTERVAL     = 180  # Drone 初始射擊間隔（幀）
+DRONE_FIRE_INTERVAL_MIN = 45   # 射擊間隔下限
 
 # 星空背景
 STAR_COUNT    = 30
@@ -47,7 +48,7 @@ PLAYER_INVINCIBLE_FRAMES = 45   # 0.75 秒（60fps × 0.75）
 
 # 補血包
 HEAL_ITEM_SPEED         = 2
-HEAL_ITEM_HP_RESTORE = 5       # 補血量
+HEAL_ITEM_HP_RESTORE = 3       # 補血量
 HEAL_DROP_INTERVAL = 300       # 每 5 秒判定一次
 
 # HEALTH_PACK_SIZE          = 20
