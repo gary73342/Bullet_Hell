@@ -1,6 +1,6 @@
 import pygame
 import random
-import math  # ─── 新增 import ───
+import math
 from game.settings import *
 
 
@@ -15,7 +15,7 @@ class Player(pygame.sprite.Sprite):
         self.rect.bottom  = SCREEN_HEIGHT - 30
         self.hp = PLAYER_HP
         self.invincible_frames = 0
-        self.hitbox = pygame.Rect(0, 0, 8, 8)
+        self.hitbox = pygame.Rect(0, 0, 32, 8)
         self.hitbox.center = self.rect.center
 
     def _make_surface(self):
@@ -45,7 +45,7 @@ class Player(pygame.sprite.Sprite):
         self.rect.clamp_ip(pygame.Rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
 
         # ─── 新增：讓 hitbox 永遠跟隨戰機的中心點，大小縮到 8x8 ───
-        self.hitbox = pygame.Rect(0, 0, 8, 8)
+        self.hitbox = pygame.Rect(0, 0, 32, 8)
         self.hitbox.center = self.rect.center
 
         if self.invincible_frames > 0:
@@ -56,19 +56,16 @@ class Player(pygame.sprite.Sprite):
 
 
 class Drone(pygame.sprite.Sprite):
-    def __init__(self, x=None, speed=None):
+    def __init__(self, x=None, speed=None, fire_interval=None, hp=None):
         super().__init__()
-        self.speed  = speed if speed is not None else DRONE_SPEED
+        self.speed         = speed if speed is not None else DRONE_SPEED
+        self.fire_interval = fire_interval if fire_interval is not None else DRONE_FIRE_INTERVAL
         self.image  = self._make_surface()
         self.rect   = self.image.get_rect()
         self.rect.centerx = x if x is not None else random.randint(20, SCREEN_WIDTH - 20)
         self.rect.y = -40
-        self.hp     = DRONE_HP
-        self._fire_timer = random.randint(0, DRONE_FIRE_INTERVAL)
-
-        # ─── 新增：用於計算左右搖擺的正弦波參數 ───
-        self.wave_offset = random.uniform(0, 50) # 隨機初始相位，讓每隻走位錯開
-        self.wave_amplitude = random.randint(1, 3) # 左右搖擺的幅度（像素）
+        self.hp     = hp if hp is not None else DRONE_HP
+        self._fire_timer = random.randint(0, self.fire_interval)
 
     def _make_surface(self):
         surf = pygame.Surface((32, 32), pygame.SRCALPHA)
@@ -80,22 +77,13 @@ class Drone(pygame.sprite.Sprite):
 
     def update(self):
         self.rect.y += self.speed
-
-        # ─── 新增：讓 X 座標隨時間做 Sine 波形搖擺 ───
-        # 藉由 current_frame 引入點時間差，做出漂亮的弧形下落
-        self.rect.x += int(math.sin(self.rect.y * 0.012 + self.wave_offset) * self.wave_amplitude)
-        
-        # 限制不要飛出牆外
-        if self.rect.left < 0: self.rect.left = 0
-        if self.rect.right > SCREEN_WIDTH: self.rect.right = SCREEN_WIDTH
-
         self._fire_timer += 1
         if self.rect.top > SCREEN_HEIGHT + 10:
             self.kill()
 
     def try_shoot(self, bullet_speed=None):
         """計時到達時回傳新的 EnemyBullet，否則回傳 None。"""
-        if self._fire_timer >= DRONE_FIRE_INTERVAL and self.rect.top > 0:
+        if self._fire_timer >= self.fire_interval and self.rect.top > 0:
             self._fire_timer = 0
             return EnemyBullet(self.rect.centerx, self.rect.bottom, speed=bullet_speed)
         return None
@@ -105,7 +93,7 @@ class EnemyBullet(pygame.sprite.Sprite):
     def __init__(self, x, y, speed=None):
         super().__init__()
         self.speed = speed if speed is not None else ENEMY_BULLET_SPEED
-        self.image = pygame.Surface((12, 24), pygame.SRCALPHA)
+        self.image = pygame.Surface((18, 24), pygame.SRCALPHA)
         self.image.fill(PINK)
         self.rect  = self.image.get_rect(centerx=x, top=y)
 

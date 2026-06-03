@@ -91,15 +91,17 @@ class Game:
             self.player_kills -= PLAYER_KILLS_PER_LEVEL
             self.player_level += 1
             self.player.hp = min(PLAYER_HP, self.player.hp + PLAYER_HP // 2)
-            self.player_fire_interval = max(2, self.player_fire_interval / 1.05)
+            self.player_fire_interval = max(6, self.player_fire_interval - 0.1)
             self.player_bullet_speed += 1
 
     def _level_params(self):
         lv = self.level
         drone_speed    = DRONE_SPEED + lv * 0.25
         bullet_speed   = ENEMY_BULLET_SPEED + lv * 0.25
-        spawn_interval = max(50, DRONE_SPAWN_INTERVAL - lv * 4)
-        return drone_speed, bullet_speed, spawn_interval
+        spawn_interval = max(15, DRONE_SPAWN_INTERVAL - lv * 3)
+        fire_interval  = max(DRONE_FIRE_INTERVAL_MIN, DRONE_FIRE_INTERVAL - lv * 10)
+        drone_hp       = min(3, 1 + lv // 8)
+        return drone_speed, bullet_speed, spawn_interval, fire_interval, drone_hp
 
     def _update(self):
         keys = pygame.key.get_pressed()
@@ -121,7 +123,7 @@ class Game:
         if self.frame % int(self.player_fire_interval) == 0:
             positions = (
                 [self.player.rect.centerx - 8, self.player.rect.centerx + 8]
-                if self.player_level >= 4
+                if self.player_level >= 10
                 else [self.player.rect.centerx]
             )
             for x in positions:
@@ -129,7 +131,7 @@ class Game:
                 self.player_bullets.add(bullet)
                 self.all_sprites.add(bullet)
 
-        drone_speed, bullet_speed, spawn_interval = self._level_params()
+        drone_speed, bullet_speed, spawn_interval, fire_interval, drone_hp = self._level_params()
 
         # Formation 模式：指數分布決定下波時機，隨機挑編隊模板
         if self.frame >= self._next_spawn:
@@ -137,14 +139,15 @@ class Game:
             for ratio in formation:
                 jitter = random.uniform(-0.05, 0.05)
                 x = int(SCREEN_WIDTH * max(0.05, min(0.95, ratio + jitter)))
-                drone = Drone(x=x, speed=drone_speed)
+                drone = Drone(x=x, speed=drone_speed, fire_interval=fire_interval, hp=drone_hp)
                 self.enemies.add(drone)
                 self.all_sprites.add(drone)
             self._next_spawn = self.frame + int(random.uniform(spawn_interval * 0.5, spawn_interval * 1.5))
 
 
-        # 新增：每 5 秒 (300幀) 以 0.5 機率生成補血包
-        if self.frame % HEAL_DROP_INTERVAL == 0:
+        # 等級 10 前每 5 秒，10 級後每 3 秒，以 0.5 機率生成補血包
+        heal_interval = 180 if self.level >= 10 else HEAL_DROP_INTERVAL
+        if self.frame % heal_interval == 0:
             if random.random() < 0.5:
                 heal_item = HealItem()
                 self.heal_items.add(heal_item)
@@ -170,20 +173,26 @@ class Game:
         for star in self.stars:
             star.update()
 
-        # 碰撞：玩家子彈打中 Drone
-        hits = pygame.sprite.groupcollide(self.player_bullets, self.enemies, True, True)
+        # 碰撞：玩家子彈打中 Drone（子彈消滅，敵機扣血）
+        hits = pygame.sprite.groupcollide(self.player_bullets, self.enemies, True, False)
         kill_count = 0
-        
+
+        hit_drones = {}
         for bullet, enemy_list in hits.items():
             for drone in enemy_list:
+                hit_drones[drone] = hit_drones.get(drone, 0) + 1
+
+        for drone, damage in hit_drones.items():
+            drone.hp -= damage
+            if drone.hp <= 0:
+                drone.kill()
                 kill_count += 1
                 self.score += DRONE_SCORE
-                
-                # ─── 新增：在被擊中的敵機中心點生成 12 個隨機噴散的爆炸粒子 ───
                 for _ in range(12):
                     p = ExplosionParticle(drone.rect.centerx, drone.rect.centery)
                     self.explosions.add(p)
                     self.all_sprites.add(p)
+
         if kill_count > 0:
             self._add_kills(kill_count)
 
@@ -263,7 +272,7 @@ class Game:
 
         # 右上：玩家等級與進度條（HP 下方）
         plv_surf = self.font_small.render(f"P-LV  {self.player_level}", True, CYAN)
-        self.screen.blit(plv_surf, (SCREEN_WIDTH - 10 - 80, 30))
+        self.screen.blit(plv_surf, plv_surf.get_rect(right=SCREEN_WIDTH - 10, top=30))
         bar_total = 80
         if self.player_level < PLAYER_MAX_LEVEL:
             filled = int(bar_total * self.player_kills / PLAYER_KILLS_PER_LEVEL)
