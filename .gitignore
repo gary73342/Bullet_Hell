@@ -10,6 +10,7 @@ CLAUDE.md
 # 系統檔案
 .DS_Store
 Thumbs.db
+__MACOSX/
 
 # Python
 __pycache__/
