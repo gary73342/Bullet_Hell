@@ -7,16 +7,23 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 
 from env import BulletHellEnv
+from env_ext import ExtBulletHellEnv
 
-TOTAL_TIMESTEPS = 8_000_000
+TOTAL_TIMESTEPS = 1_000_000
 SAVE_FREQ       = 100_000
 MODEL_NAME      = "ppo_bullet_hell"
 N_ENVS          = 4
 
+ENV_CLASSES = {
+    "original": BulletHellEnv,
+    "ext":      ExtBulletHellEnv,
+}
 
-def make_env():
+
+def make_env(env_type):
+    EnvClass = ENV_CLASSES[env_type]
     def _init():
-        return BulletHellEnv(render_mode=None)
+        return EnvClass(render_mode=None)
     return _init
 
 
@@ -24,14 +31,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-name", type=str, default=None,
                         help="訓練名稱，例如 exp_lr0001；不填則自動用時間戳")
+    parser.add_argument("--env", type=str, default="original", choices=["original", "ext"],
+                        help="訓練環境：original（預設）或 ext（外部遊戲）")
     args = parser.parse_args()
 
     run_name = args.run_name or datetime.now().strftime("train_%Y%m%d_%H%M%S")
     run_dir  = os.path.join("models", run_name)
     os.makedirs(run_dir, exist_ok=True)
     print(f"訓練資料夾：{run_dir}")
+    print(f"訓練環境：{args.env}")
 
-    env = SubprocVecEnv([make_env() for _ in range(N_ENVS)])
+    env = SubprocVecEnv([make_env(args.env) for _ in range(N_ENVS)])
     env = VecMonitor(env, filename=os.path.join(run_dir, "monitor"))
 
     model = PPO(
