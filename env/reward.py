@@ -22,7 +22,7 @@ SIGMA_ENEMY      = 25.0    # 敵機指數衰減長度常數（px）
 GAMMA            = 0.999   # 與 PPO 的折扣因子一致
 
 # ─── X 軸對齊獎勵參數 ───
-X_ALIGN_REWARD    = 0.15   # 完全對齊時每步的獎勵上限
+X_ALIGN_REWARD    = 0.06   # 完全對齊時每步的獎勵上限
 X_ALIGN_THRESHOLD = 48     # X 距離小於此值才給獎勵（px）
 
 STATIC_THRESHOLD = 8       # ─── 縮短靜止容忍步數 (10 -> 8) ───
