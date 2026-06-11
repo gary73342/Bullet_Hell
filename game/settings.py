@@ -21,7 +21,7 @@ ORANGE     = (255, 128, 0)     # 爆炸粒子顏色
 PLAYER_SPEED     = 7
 PLAYER_HP        = 5
 PLAYER_MAX_LEVEL = 20
-PLAYER_KILLS_PER_LEVEL = 15
+PLAYER_KILLS_PER_LEVEL  = 15
 
 # 玩家子彈
 PLAYER_BULLET_SPEED    = 10
@@ -36,7 +36,7 @@ DRONE_SPAWN_INTERVAL = 72   # 每幾幀生成一隻（60fps → 約1.2秒）
 # 敵人子彈
 ENEMY_BULLET_SPEED   = 4
 DRONE_FIRE_INTERVAL     = 180  # Drone 初始射擊間隔（幀）
-DRONE_FIRE_INTERVAL_MIN = 60   # 射擊間隔下限
+DRONE_FIRE_INTERVAL_MIN = 90   # 射擊間隔下限
 
 # 星空背景
 STAR_COUNT    = 30

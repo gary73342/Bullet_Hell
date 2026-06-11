@@ -17,13 +17,11 @@ REWARD_BORDER   = -2.0
 # K 值依「積分等能量」原則換算：K_exp = K_coulomb·ln(71)/σ，中距離數值相近
 DANGER_BULLET_K  = 6.0     # 子彈排斥場強度（原 35.0 等效換算）
 DANGER_ENEMY_K   = 2.6     # 敵機排斥場強度（原 15.0 等效換算）
-SIGMA_BULLET     = 25.0    # 子彈指數衰減長度常數（px）
-SIGMA_ENEMY      = 25.0    # 敵機指數衰減長度常數（px）
+SIGMA_BULLET_X   = 30.0    # 子彈 x 方向衰減長度（px），略大使側閃範圍更遠
+SIGMA_BULLET_Y   = 20.0    # 子彈 y 方向衰減長度（px）
+SIGMA_ENEMY_X    = 30.0    # 敵機 x 方向衰減長度（px）
+SIGMA_ENEMY_Y    = 20.0    # 敵機 y 方向衰減長度（px）
 GAMMA            = 0.999   # 與 PPO 的折扣因子一致
-
-# ─── X 軸對齊獎勵參數 ───
-X_ALIGN_REWARD    = 0.06   # 完全對齊時每步的獎勵上限
-X_ALIGN_THRESHOLD = 48     # X 距離小於此值才給獎勵（px）
 
 STATIC_THRESHOLD = 8       # ─── 縮短靜止容忍步數 (10 -> 8) ───
 
@@ -41,11 +39,11 @@ class RewardCalculator:
     def _compute_phi(self, player_x, player_y, bullet_positions, enemy_positions):
         phi = 0.0
         for bx, by in bullet_positions:
-            d = math.hypot(player_x - bx, player_y - by)
-            phi -= DANGER_BULLET_K * math.exp(-d / SIGMA_BULLET)
+            d = math.sqrt(((player_x - bx) / SIGMA_BULLET_X) ** 2 + ((player_y - by) / SIGMA_BULLET_Y) ** 2)
+            phi -= DANGER_BULLET_K * math.exp(-d)
         for ex, ey in enemy_positions:
-            d = math.hypot(player_x - ex, player_y - ey)
-            phi -= DANGER_ENEMY_K * math.exp(-d / SIGMA_ENEMY)
+            d = math.sqrt(((player_x - ex) / SIGMA_ENEMY_X) ** 2 + ((player_y - ey) / SIGMA_ENEMY_Y) ** 2)
+            phi -= DANGER_ENEMY_K * math.exp(-d)
         return phi
 
     def calculate(self, player_x, player_y, kills, hit, died, dx, dy, healed, bullet_positions, enemy_positions, player_level=0, player_hp=5, is_invincible=False):
@@ -95,12 +93,5 @@ class RewardCalculator:
             self._prev_phi = phi_curr
 
         reward += REWARD_SURVIVE
-
-        # X 軸對齊獎勵：對齊在玩家上方的敵機
-        enemies_above = [(ex, ey) for ex, ey in enemy_positions if ey < player_y]
-        if enemies_above:
-            min_x_dist = min(abs(player_x - ex) for ex, ey in enemies_above)
-            if min_x_dist < X_ALIGN_THRESHOLD:
-                reward += X_ALIGN_REWARD * (1.0 - min_x_dist / X_ALIGN_THRESHOLD)
 
         return reward
