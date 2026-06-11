@@ -93,9 +93,12 @@ class Game:
         return True
 
     def _add_kills(self, count):
-        if self.player_level >= PLAYER_MAX_LEVEL:
-            return
         self.player_kills += count
+        if self.player_level >= PLAYER_MAX_LEVEL:
+            while self.player_kills >= PLAYER_KILLS_PER_LEVEL:
+                self.player_kills -= PLAYER_KILLS_PER_LEVEL
+                self.player.hp = min(PLAYER_HP, self.player.hp + PLAYER_HP // 2)
+            return
         while self.player_kills >= PLAYER_KILLS_PER_LEVEL and self.player_level < PLAYER_MAX_LEVEL:
             self.player_kills -= PLAYER_KILLS_PER_LEVEL
             self.player_level += 1
@@ -108,7 +111,7 @@ class Game:
         lv = self.level
         drone_speed    = min(9.0, DRONE_SPEED + lv * 0.25)
         bullet_speed   = min(11.0, ENEMY_BULLET_SPEED + lv * 0.25)
-        spawn_interval = max(30, DRONE_SPAWN_INTERVAL - lv * 2)
+        spawn_interval = max(42, DRONE_SPAWN_INTERVAL - lv * 2)
         fire_interval  = max(DRONE_FIRE_INTERVAL_MIN, DRONE_FIRE_INTERVAL - lv * 6)
         drone_hp       = min(3, 1 + lv // 8)
         return drone_speed, bullet_speed, spawn_interval, fire_interval, drone_hp
@@ -158,14 +161,12 @@ class Game:
             self._next_spawn = self.frame + int(random.uniform(spawn_interval * 0.5, spawn_interval * 1.5))
 
 
-        # 等級 10 前每 5 秒，10 級後每 3 秒，機率隨等級提升（0.5 + level * 0.02，上限 0.9）
+        # 等級 10 前每 5 秒，10 級後每 3 秒，必定生成
         heal_interval = 180 if self.level >= 10 else HEAL_DROP_INTERVAL
-        heal_chance = min(0.9, 0.5 + self.level * 0.02)
         if self.frame % heal_interval == 0:
-            if random.random() < heal_chance:
-                heal_item = HealItem()
-                self.heal_items.add(heal_item)
-                self.all_sprites.add(heal_item)
+            heal_item = HealItem()
+            self.heal_items.add(heal_item)
+            self.all_sprites.add(heal_item)
 
         # 子彈移動
         self.player_bullets.update()
@@ -293,7 +294,7 @@ class Game:
         if self.player_level < PLAYER_MAX_LEVEL:
             filled = int(bar_total * self.player_kills / PLAYER_KILLS_PER_LEVEL)
         else:
-            filled = bar_total
+            filled = int(bar_total * self.player_kills / PLAYER_KILLS_PER_LEVEL)
         pygame.draw.rect(self.screen, GRAY, (SCREEN_WIDTH - 10 - bar_total, 50, bar_total, 6))
         pygame.draw.rect(self.screen, CYAN, (SCREEN_WIDTH - 10 - bar_total, 50, filled,    6))
 

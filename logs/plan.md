@@ -112,21 +112,32 @@ Discrete(9)：
 
 **Reward Function**
 
-```python
-reward += +5.0  * kills              # 擊殺普通敵人
-reward += -10.0 * hit                # 被子彈擊中
-reward += -50.0 * died               # 死亡（終局）
-reward += -0.5  * (static > 10步)    # 連續靜止懲罰，避免躲角落
-reward += +0.02 * (1 - dist / max_dist)  # 靠近甜蜜點獎勵
+實作：`env/reward.py` — `RewardCalculator.calculate(...)`
+
+| 項目 | 數值 | 條件 |
+|------|------|------|
+| 擊殺 | `+5.0` | 每擊殺一隻 |
+| 被擊中 | `-4.0 - 2.0 × (等級 // 5)` | 等級越高懲罰越重 |
+| 死亡 | `-50.0` | HP 歸零 |
+| 補血 | `+2.5 × scale`（上限 `+5.0`） | 缺血越多 scale 越大（最高 2 倍） |
+| 存活 | `+0.1` | 每步 |
+| 靜止懲罰 | `-1.0 × (1 + 超過步數 × 0.1)` | 連續不動超過 8 步後累積 |
+| 貼邊懲罰 | `-2.0` | 距邊界 < 30px |
+| 貼邊 + 靜止 | 額外 `-3.0` | 同時貼邊且不動 |
+
+**Potential-Based Repulsive Field**（`shaping = γΦ(s') − Φ(s)`，γ = 0.999）
+
+```
+Φ(s) = -Σ K · exp(-d)
+d = sqrt((Δx/σx)² + (Δy/σy)²)   ← 橢圓形衰減，x 方向範圍較大鼓勵側閃
 ```
 
-**甜蜜點**：x = 畫面中央（240px），y = 畫面 3/4 處（480px）
+| 場 | K | σx | σy |
+|----|---|----|----|
+| 子彈排斥 | 6.0 | 30px | 20px |
+| 敵機排斥 | 2.6 | 30px | 20px |
 
-**移除項目**：每幀存活 reward（消極求生）、Boss 擊殺 reward（Boss 尚未實作）
-
-**參考論文**：DeepMind DQN (2013, 2015)，論文使用純分數作為 reward + Reward Clipping (±1)。本專題針對自訂遊戲加入輔助 reward，Clipping 留待訓練後視穩定性決定是否加入。
-
-**實作**：`env/reward.py` — `RewardCalculator.calculate(player_x, player_y, kills, hit, died)`
+無敵幀期間暫停 shaping 計算（重置 prev_phi）。
 
 #### 3. 訓練層
 
@@ -210,4 +221,4 @@ Input (12, 112, 84)  ← 4 幀 × RGB，channel-first
 
 
 
-*最後更新：2026-06-02*
+*最後更新：2026-06-11*
