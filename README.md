@@ -1,7 +1,7 @@
 # Bullet Hell — Deep Reinforcement Learning
 
 近代人工智慧期末專題。使用 PPO 訓練 AI 玩兩款 Bullet Hell 遊戲。
-
+[Demo影片](https://youtu.be/pnUBd9yaF7I)
 ---
 
 ## 兩款遊戲
