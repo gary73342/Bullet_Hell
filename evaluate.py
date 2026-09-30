@@ -5,7 +5,7 @@ from env import BulletHellEnv
 from env_ext import ExtBulletHellEnv
 
 DEFAULT_MODELS = {
-    "original": "models/train5/ppo_bullet_hell_final",
+    "original": "models/train6/ppo_bullet_hell_2807616_steps",
     "ext":      "models/ext_run/ppo_bullet_hell_final",
 }
 
